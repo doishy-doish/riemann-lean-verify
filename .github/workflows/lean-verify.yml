@@ -1,0 +1,28 @@
+name: lean-verify
+on: [workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+      - name: reassemble
+        run: cat part*.bin > lean.tar.gz && echo "9631b4f020199e580ba86178cb56c6e9b09f690c2369a80dc4334aa93f49c7fc  lean.tar.gz" | sha256sum -c
+      - name: extract
+        run: tar xzf lean.tar.gz && ls lean/ && cat lean/lean-toolchain
+      - uses: actions/cache@v4
+        with:
+          path: |
+            lean/.lake
+            ~/.elan
+          key: lean-cache-0df444a
+      - name: install elan
+        run: curl -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none && echo "$HOME/.elan/bin" >> $GITHUB_PATH
+      - name: lake build (all default targets)
+        working-directory: lean
+        run: lake build 2>&1 | tail -c 20000
+      - name: candidate main-theorem files
+        working-directory: lean
+        run: find . -iname '*main*.lean' | head -50; grep -rl --include='*.lean' -e 'RiemannHypothesis' -e 'theorem.*[Rr]iemann' . | head -50
+      - uses: actions/upload-artifact@v4
+        with: {name: verify-log, path: lean/}
